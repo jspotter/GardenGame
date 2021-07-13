@@ -112,17 +112,17 @@ class ConveyorBeltTray(Sprite):
     def update(self):
         self.move(-TRAY_SPEED, 0)
 
-class ConveyorBelt(Object):
+class ConveyorBelt:
     def __init__(self):
         self.trays = []
         for i in range(11):
-            trays.append(ConveyorBeltTray(i * TRAY_WIDTH, HEIGHT))
+            self.trays.append(ConveyorBeltTray(i * TRAY_WIDTH, HEIGHT))
     
     def update(self):
-        [tray.update() for tray in trays]
+        [tray.update() for tray in self.trays]
 
     def draw(self, screen):
-        [tray.draw(screen) for tray in trays]
+        [tray.draw(screen) for tray in self.trays]
 
 def main():
     '''
