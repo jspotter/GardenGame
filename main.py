@@ -20,9 +20,27 @@ class Sprite(pygame.sprite.Sprite):
 
         self.rect.bottomleft = [startx, starty]
     
-    def move(self, dx, dy, obstacles=None):
+    def move(self, dx, dy, bounds=False, obstacles=None):
         if obstacles is None:
             obstacles = []
+        
+        if bounds:
+            min_dx = max(-self.rect.left, dx)
+            max_dx = min(WIDTH - self.rect.right, dx)
+            
+            min_dy = max(-self.rect.top, dy)
+            max_dy = min(HEIGHT - self.rect.bottom, dy)
+
+            # Check bounds before moving
+            if dx < min_dx:
+                dx = min_dx
+            elif dx > max_dx:
+                dx = max_dx
+            
+            if dy < min_dy:
+                dy = min_dy
+            elif dy > max_dy:
+                dy = max_dy
     
         while self.check_collision(0, dy, obstacles):
             dy -= numpy.sign(dy)
@@ -31,6 +49,7 @@ class Sprite(pygame.sprite.Sprite):
             dx -= numpy.sign(dx)
 
         self.rect.move_ip([dx, dy])
+        return dx, dy
 
     def update(self):
         pass
@@ -107,33 +126,9 @@ class Person(Sprite):
         else:
             self.hands_free = True
 
-        self.move(hsp, vsp, obstacles)
+        dx, dy = self.move(hsp, vsp, True, obstacles)
         if self.plant is not None:
-            self.plant.move(hsp, vsp)
-    
-    def move(self, dx, dy, obstacles):
-        '''
-        Move within the bounds
-        of the screen.
-        '''
-        min_dx = max(-self.rect.left, dx)
-        max_dx = min(WIDTH - self.rect.right, dx)
-        
-        min_dy = max(-self.rect.top, dy)
-        max_dy = min(HEIGHT - self.rect.bottom, dy)
-
-        # Check bounds before moving
-        if dx < min_dx:
-            dx = min_dx
-        elif dx > max_dx:
-            dx = max_dx
-        
-        if dy < min_dy:
-            dy = min_dy
-        elif dy > max_dy:
-            dy = max_dy
-        
-        super().move(dx, dy, obstacles)
+            self.plant.move(dx, dy, True)
 
 class Container(Sprite):
     def __init__(self, startx, starty):
@@ -155,9 +150,9 @@ class Plant(Sprite):
         super().draw(screen)
         self.container.draw(screen)
     
-    def move(self, dx, dy):
-        super().move(dx, dy)
-        self.container.move(dx, dy)
+    def move(self, dx, dy, bounds=False):
+        dx, dy = super().move(dx, dy, bounds)
+        self.container.move(dx, dy, bounds)
 
 class ConveyorBeltTray(Sprite):
     '''
