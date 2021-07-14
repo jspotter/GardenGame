@@ -49,6 +49,11 @@ class Person(Sprite):
     Represent the game's primary actor.
     '''
 
+    NORTH = 0
+    EAST = 1
+    SOUTH = 2
+    WEST = 3
+
     def __init__(self, startx, starty):
         '''
         Inspired by:
@@ -57,28 +62,51 @@ class Person(Sprite):
         super().__init__("assets/person3.png", startx, starty)
         self.speed = 4
         self.plant = None
+        self.facing = Person.NORTH
+        self.hands_free = True
 
-    def update(self, obstacles):
+    def update(self, plants, obstacles):
         '''
-        Listen for key presses and respond by
-        moving.
+        Listen for key presses and respond by:
+            * moving
+            * picking up / setting down plant
+            * TODO: picking up / setting down water
         '''
         hsp = 0
         vsp = 0
         key = pygame.key.get_pressed()
         if key[pygame.K_LEFT]:
             hsp = -self.speed
+            self.facing = Person.WEST
         elif key[pygame.K_RIGHT]:
             hsp = self.speed
+            self.facing = Person.EAST
         elif key[pygame.K_UP]:
             vsp = -self.speed
+            self.facing = Person.NORTH
         elif key[pygame.K_DOWN]:
             vsp = self.speed
-        elif key[pygame.K_SPACE]:
-            if self.plant is None:
-                pass
-            else:
-                pass
+            self.facing = Person.SOUTH
+
+        if key[pygame.K_SPACE]:
+            if self.hands_free:
+                self.hands_free = False
+                if self.plant is None:
+                    nearby_plants = pygame.sprite.spritecollide(self, plants, False)
+
+                    if len(nearby_plants) > 0:
+                        self.plant = nearby_plants[0]
+                        self.plant.person = self
+                        if self.plant.tray is not None:
+                            self.plant.tray.plant = None
+                            self.plant.tray = None
+                else:
+                    self.plant.person = None
+                    self.plant = None
+                    # TODO: allow placement back on conveyor belt?
+        else:
+            self.hands_free = True
+
         self.move(hsp, vsp, obstacles)
         if self.plant is not None:
             self.plant.move(hsp, vsp)
@@ -115,6 +143,8 @@ class Plant(Sprite):
     def __init__(self, startx, starty):
         super().__init__("assets/plant1.png", startx, starty)
         self.container = Container(startx, starty)
+        self.tray = None
+        self.person = None
 
         self.rect.move_ip([
             self.rect.left - self.container.rect.left,
@@ -185,6 +215,7 @@ class ConveyorBelt:
 
         new_plant = Plant(last_tray.rect.left + PLANT_BUFFER, last_tray.rect.bottom - PLANT_BUFFER)
         last_tray.plant = new_plant
+        new_plant.tray = last_tray
 
         return new_plant
     
@@ -211,7 +242,7 @@ def main():
 
     while True:
         pygame.event.pump()
-        person.update(obstacles)
+        person.update(plants, obstacles)
         if cycle % 5 == 0:
             belt.update()
         if cycle % 1000 == 0:
