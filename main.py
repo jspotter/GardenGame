@@ -120,6 +120,9 @@ class ConveyorBelt:
     
     def update(self):
         [tray.update() for tray in self.trays]
+        if self.trays[0].rect.right < 0:
+            self.trays[0].rect.left = self.trays[-1].rect.right
+            self.trays = self.trays[1:] + [self.trays[0]]
 
     def draw(self, screen):
         [tray.draw(screen) for tray in self.trays]
@@ -138,11 +141,14 @@ def main():
     person = Person(100, 200)
     plants = []
     belt = ConveyorBelt()
+    
+    cycle = 0
 
     while True:
         pygame.event.pump()
         person.update()
-        belt.update()
+        if cycle % 5 == 0:
+            belt.update()
 
         screen.fill(BACKGROUND)
         
@@ -153,6 +159,7 @@ def main():
         pygame.display.flip()
 
         clock.tick(60)
+        cycle += 1
 
 if __name__ == "__main__":
     main()
