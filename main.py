@@ -1,9 +1,11 @@
-import pygame
+import pygame, numpy
 
 WIDTH = 400
 HEIGHT = 300
 TRAY_WIDTH = 40
 TRAY_SPEED = 1
+NUM_TRAYS = 11
+PLANT_BUFFER = 5
 BACKGROUND = (255, 255, 255)
 
 class Sprite(pygame.sprite.Sprite):
@@ -18,7 +20,16 @@ class Sprite(pygame.sprite.Sprite):
 
         self.rect.bottomleft = [startx, starty]
     
-    def move(self, dx, dy):
+    def move(self, dx, dy, obstacles=None):
+        if obstacles is None:
+            obstacles = []
+    
+        while self.check_collision(0, dy, obstacles):
+            dy -= numpy.sign(dy)
+
+        while self.check_collision(dx, dy, obstacles):
+            dx -= numpy.sign(dx)
+
         self.rect.move_ip([dx, dy])
 
     def update(self):
@@ -26,6 +37,12 @@ class Sprite(pygame.sprite.Sprite):
 
     def draw(self, screen):
         screen.blit(self.image, self.rect)
+    
+    def check_collision(self, x, y, grounds):
+        self.rect.move_ip([x, y])
+        collide = pygame.sprite.spritecollideany(self, grounds)
+        self.rect.move_ip([-x, -y])
+        return collide
 
 class Person(Sprite):
     '''
@@ -39,8 +56,9 @@ class Person(Sprite):
         '''
         super().__init__("assets/person3.png", startx, starty)
         self.speed = 4
+        self.plant = None
 
-    def update(self):
+    def update(self, obstacles):
         '''
         Listen for key presses and respond by
         moving.
@@ -56,10 +74,16 @@ class Person(Sprite):
             vsp = -self.speed
         elif key[pygame.K_DOWN]:
             vsp = self.speed
-        
-        self.move(hsp, vsp)
+        elif key[pygame.K_SPACE]:
+            if self.plant is None:
+                pass
+            else:
+                pass
+        self.move(hsp, vsp, obstacles)
+        if self.plant is not None:
+            self.plant.move(hsp, vsp)
     
-    def move(self, dx, dy):
+    def move(self, dx, dy, obstacles):
         '''
         Move within the bounds
         of the screen.
@@ -80,8 +104,8 @@ class Person(Sprite):
             dy = min_dy
         elif dy > max_dy:
             dy = max_dy
-
-        self.rect.move_ip([dx, dy])
+        
+        super().move(dx, dy, obstacles)
 
 class Container(Sprite):
     def __init__(self, startx, starty):
@@ -106,26 +130,66 @@ class Plant(Sprite):
         self.container.move(dx, dy)
 
 class ConveyorBeltTray(Sprite):
+    '''
+    Single tray on a conveyor belt
+    that carries plants
+    '''
     def __init__(self, startx, starty):
         super().__init__("assets/tray1.png", startx, starty)
+        self.plant = None
     
     def update(self):
+        '''
+        Move to the left. Move our plant
+        if we have one.
+        '''
         self.move(-TRAY_SPEED, 0)
+        if self.plant is not None:
+            self.plant.move(-TRAY_SPEED, 0)
 
 class ConveyorBelt:
+    '''
+    Constantly moving conveyor belt that can contain
+    plants
+    '''
     def __init__(self):
         self.trays = []
-        for i in range(11):
+        for i in range(NUM_TRAYS):
             self.trays.append(ConveyorBeltTray(i * TRAY_WIDTH, HEIGHT))
     
     def update(self):
+        '''
+        Update each tray in belt
+        '''
         [tray.update() for tray in self.trays]
         if self.trays[0].rect.right < 0:
             self.trays[0].rect.left = self.trays[-1].rect.right
             self.trays = self.trays[1:] + [self.trays[0]]
 
     def draw(self, screen):
+        '''
+        Draw each tray in belt
+        '''
         [tray.draw(screen) for tray in self.trays]
+    
+    def add_plant(self):
+        '''
+        If the last tray is empty, add a plant to it
+        '''
+        last_tray = self.trays[-1]
+        
+        # cannot add a new plant if the last
+        # tray is already full
+        if last_tray.plant is not None:
+            return None
+
+        new_plant = Plant(last_tray.rect.left + PLANT_BUFFER, last_tray.rect.bottom - PLANT_BUFFER)
+        last_tray.plant = new_plant
+
+        return new_plant
+    
+    def get_trays(self):
+        return self.trays
 
 def main():
     '''
@@ -141,14 +205,19 @@ def main():
     person = Person(100, 200)
     plants = []
     belt = ConveyorBelt()
+    obstacles = belt.get_trays()
     
     cycle = 0
 
     while True:
         pygame.event.pump()
-        person.update()
+        person.update(obstacles)
         if cycle % 5 == 0:
             belt.update()
+        if cycle % 1000 == 0:
+            new_plant = belt.add_plant()
+            if new_plant is not None:
+                plants.append(new_plant)
 
         screen.fill(BACKGROUND)
         
