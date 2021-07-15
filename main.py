@@ -1,4 +1,4 @@
-import pygame, numpy, sys
+import pygame, numpy
 
 WIDTH = 400
 HEIGHT = 300
@@ -397,8 +397,6 @@ def main():
         pygame.event.pump()
         person.update(plants, obstacles)
         belt.update()
-        # if cycle % 2 == 0:
-        #     belt.update()
 
         if cycle % 1000 == 0:
             new_plant = belt.add_plant()
