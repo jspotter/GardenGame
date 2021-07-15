@@ -39,6 +39,12 @@ class Sprite(pygame.sprite.Sprite):
         Return the dx and dy actually moved (may
         be less than parameter values).
         '''
+        if self.immune_from_obstacles and \
+            obstacles is not None and \
+            not self.check_collision(0, 0, obstacles):
+            
+            self.set_immune_from_obstacles(False)
+
         if obstacles is None or self.immune_from_obstacles:
             obstacles = []
         
@@ -129,9 +135,15 @@ class Person(Sprite):
         Inspired by:
         https://docs.replit.com/tutorials/14-2d-platform-game
         '''
-        super().__init__("assets/person3.png", startx, starty)
+        super().__init__("assets/person3_front.png", startx, starty)
+        self.front_image = self.image
+        self.back_image = pygame.image.load("assets/person3_back.png")
+        self.left_image = pygame.image.load("assets/person3_right.png")
+        self.left_image = pygame.transform.flip(self.left_image, True, False)
+        self.right_image = pygame.image.load("assets/person3_right.png")
+
         self.speed = 4
-        self.facing = Person.NORTH
+        self.facing = Person.SOUTH
         self.hands_free = True
 
     def update(self, plants, obstacles):
@@ -163,7 +175,7 @@ class Person(Sprite):
                 if self.subsprite is None:
                     self.pickup_nearby_plant(plants)
                 else:
-                    self.subsprite.person = None
+                    self.subsprite.holder = None
                     self.subsprite = None
                     # TODO: allow placement back on conveyor belt?
         else:
@@ -172,7 +184,18 @@ class Person(Sprite):
         self.move(dx, dy, True, obstacles)
 
     def change_direction(self, direction):
+        if direction == self.facing:
+            return
+
         self.facing = direction
+        if self.facing == Person.NORTH:
+            self.image = self.back_image
+        elif self.facing == Person.SOUTH:
+            self.image = self.front_image
+        elif self.facing == Person.EAST:
+            self.image = self.right_image
+        elif self.facing == Person.WEST:
+            self.image = self.left_image
         self.move_plant_to_front()
     
     def pickup_nearby_plant(self, plants):
@@ -238,13 +261,6 @@ class Plant(Sprite):
     def draw(self, screen):
         super().draw(screen)
         self.subsprite.draw(screen)
-    
-    def move(self, dx, dy, bounds=False, obstacles=None):
-        super().move(dx, dy, bounds, obstacles)
-        if self.immune_from_obstacles and \
-            obstacles is not None and \
-            not self.check_collision(0, 0, obstacles):
-            self.set_immune_from_obstacles(False)
 
 class ConveyorBeltTray(Sprite):
     '''
@@ -328,8 +344,9 @@ def main():
     while True:
         pygame.event.pump()
         person.update(plants, obstacles)
-        if cycle % 2 == 0:
-            belt.update()
+        belt.update()
+        # if cycle % 2 == 0:
+        #     belt.update()
         if cycle % 1000 == 0:
             new_plant = belt.add_plant()
             if new_plant is not None:
