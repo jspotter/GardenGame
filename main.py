@@ -1,4 +1,4 @@
-import pygame, numpy
+import pygame, numpy, random
 
 WIDTH = 400
 HEIGHT = 300
@@ -30,8 +30,11 @@ class Sprite(pygame.sprite.Sprite):
 
     def get_bottom_edge(self):
         return pygame.Rect(self.rect.left,\
-            self.rect.bottom - BOTTOM_EDGE_BUFFER,\
-            self.rect.width, BOTTOM_EDGE_BUFFER)
+            self.get_rect().bottom - BOTTOM_EDGE_BUFFER,\
+            self.get_rect().width, BOTTOM_EDGE_BUFFER)
+    
+    def get_rect(self):
+        return self.rect
     
     def adjust_deltas(self, dx, dy, bounds=False, obstacles=None, semi_obstacles=None):
         '''
@@ -61,11 +64,11 @@ class Sprite(pygame.sprite.Sprite):
             semi_obstacles = []
         
         if bounds:
-            min_dx = max(-self.rect.left, dx)
-            max_dx = min(WIDTH - self.rect.right, dx)
+            min_dx = max(-self.get_rect().left, dx)
+            max_dx = min(WIDTH - self.get_rect().right, dx)
             
-            min_dy = max(-self.rect.top, dy)
-            max_dy = min(HEIGHT - self.rect.bottom, dy)
+            min_dy = max(-self.get_rect().top, dy)
+            max_dy = min(HEIGHT - self.get_rect().bottom, dy)
 
             # Check bounds before moving
             if dx < min_dx:
@@ -148,8 +151,8 @@ class Sprite(pygame.sprite.Sprite):
     
     def set_immune_from_obstacles(self, value):
         self.immune_from_obstacles = value
-        if self.subsprite is not None:
-            self.subsprite.set_immune_from_obstacles(value)
+        # if self.subsprite is not None:
+        #     self.subsprite.set_immune_from_obstacles(value)
 
 class Person(Sprite):
     '''
@@ -180,7 +183,7 @@ class Person(Sprite):
         self.facing = Person.SOUTH
         self.hands_free = True
 
-    def update(self, plants, obstacles):
+    def update(self, plants, obstacles, watering_can):
         '''
         Listen for key presses and respond by:
             * moving
@@ -207,13 +210,13 @@ class Person(Sprite):
             if self.hands_free:
                 self.hands_free = False
                 if self.subsprite is None:
-                    self.pickup_nearby_plant(plants)
+                    self.pickup_nearby_object(plants)
                 else:
-                    self.place_plant()
+                    self.place_object()
         else:
             self.hands_free = True
         
-        semi_obstacles = [p for p in plants if p != self.subsprite]
+        semi_obstacles = [p for p in plants if p != self.subsprite] + [watering_can]
         self.move(dx, dy, True, obstacles, semi_obstacles)
 
     def change_direction(self, direction):
@@ -229,12 +232,13 @@ class Person(Sprite):
             self.image = self.right_image
         elif self.facing == Person.WEST:
             self.image = self.left_image
-        self.move_plant_to_front()
+
+        self.move_object_to_front()
     
-    def pickup_nearby_plant(self, plants):
+    def pickup_nearby_object(self, plants):
         '''
-        If we don't have a plant and there is a plant
-        nearby, pick up one nearby plant and move it
+        If we don't have an object and there is an object
+        nearby, pick up one nearby object and move it
         to the front.
         '''
         if self.subsprite is not None:
@@ -247,53 +251,79 @@ class Person(Sprite):
             if self.subsprite.holder is not None:
                 self.subsprite.holder.subsprite = None
             self.subsprite.holder = self
-            self.move_plant_to_front()
+            self.move_object_to_front()
     
-    def place_plant(self):
-        '''
-        If we have a plant, place it down
-        '''
-        if self.subsprite is None:
-            return
-
+    def get_plant_placement_buffer(self):
         extra_buffer = -PLANT_PLACEMENT_BUFFER
         if self.facing == Person.SOUTH:
             extra_buffer = -extra_buffer
         elif self.facing == Person.NORTH:
             extra_buffer *= 2
-        self.subsprite.move(0, self.rect.bottom - self.subsprite.subsprite.rect.bottom + extra_buffer)
+        
+        return extra_buffer
+    
+    def place_object(self):
+        '''
+        If we have an object, place it down
+        '''
+        if self.subsprite is None:
+            return
+
+        extra_buffer = self.get_plant_placement_buffer()
+        self.subsprite.move(0, self.get_rect().bottom - self.subsprite.get_rect().bottom + extra_buffer)
         self.subsprite.holder = None
         self.subsprite = None
         # TODO: allow placement back on conveyor belt?
             
-    def move_plant_to_front(self):
+    def move_object_to_front(self):
         '''
-        Move the plant to the front of our body,
+        Move the object to the front of our body,
         depending on which direction we are facing.
         '''
         if self.subsprite is None or self.subsprite.subsprite is None:
             return
         
+        my_rect = self.get_rect()
+        sub_rect = self.subsprite.get_rect()
+
+        extra_buffer = self.get_plant_placement_buffer()
+        if self.facing == Person.SOUTH:
+            extra_buffer *= 0.5
+        else:
+            extra_buffer *= 1.5
+
         if self.facing == Person.NORTH:
             self.subsprite.move(\
-                self.rect.centerx - self.subsprite.subsprite.rect.centerx, \
-                self.rect.top - self.subsprite.subsprite.rect.top)
+                my_rect.centerx - sub_rect.centerx, \
+                my_rect.bottom - sub_rect.bottom)
         elif self.facing == Person.EAST:
             self.subsprite.move(\
-                self.rect.centerx - self.subsprite.subsprite.rect.left, \
-                self.rect.centery - self.subsprite.subsprite.rect.centery)
+                my_rect.centerx - sub_rect.left, \
+                my_rect.bottom - sub_rect.bottom)
         if self.facing == Person.SOUTH:
             self.subsprite.move(\
-                self.rect.centerx - self.subsprite.subsprite.rect.centerx, \
-                self.rect.bottom - self.subsprite.subsprite.rect.bottom)
+                my_rect.centerx - sub_rect.centerx, \
+                my_rect.bottom - sub_rect.bottom)
         if self.facing == Person.WEST:
             self.subsprite.move(\
-                self.rect.centerx - self.subsprite.subsprite.rect.right, \
-                self.rect.centery - self.subsprite.subsprite.rect.centery)
+                my_rect.centerx - sub_rect.right, \
+                my_rect.bottom - sub_rect.bottom)
+
+        self.subsprite.move(0, extra_buffer)
 
 class Container(Sprite):
     def __init__(self, startx, starty):
         super().__init__("assets/pot.png", startx, starty)
+
+class WaterManager:
+    def __init__(self):
+        self.water_level = 0
+        self.cycles_without_water = 0
+        self.max_water_level = random.randint(10, 20)
+        self.cycles_per_water_loss = random.randint(30, 60)
+        self.overwater_buffer = 2
+        self.overwater_limit = self.max_water_level * 2
+        self.overwater_decay = random.randint(120, 240)
 
 class Plant(Sprite):
     '''
@@ -302,18 +332,35 @@ class Plant(Sprite):
     def __init__(self, startx, starty):
         super().__init__("assets/plant1.png", startx, starty)
         self.subsprite = Container(startx, starty)
+        self.water_manager = WaterManager()
 
         self.rect.move_ip([
             self.rect.left - self.subsprite.rect.left,
             self.subsprite.rect.top - self.rect.bottom
         ])
     
+    def get_rect(self):
+        new_left = min(self.rect.left, self.subsprite.rect.left)
+        new_right = max(self.rect.right, self.subsprite.rect.right)
+        new_top = min(self.rect.top, self.subsprite.rect.top)
+        new_bottom = max(self.rect.bottom, self.subsprite.rect.bottom)
+
+        return pygame.Rect(new_left, new_top, new_right - new_left,\
+            new_bottom - new_top)
+
     def get_bottom_edge(self):
         return self.subsprite.get_bottom_edge()
 
     def draw(self, screen):
         super().draw(screen)
         self.subsprite.draw(screen)
+
+class WateringCan(Sprite):
+    '''
+    Watering can sprite used to water plants.
+    '''
+    def __init__(self, startx, starty):
+        super().__init__("assets/watering_can.png", startx, starty)
 
 class ConveyorBeltTray(Sprite):
     '''
@@ -387,6 +434,7 @@ def main():
     clock = pygame.time.Clock()
 
     person = Person(100, 200)
+    watering_can = WateringCan(300, 200)
     plants = []
     belt = ConveyorBelt()
     obstacles = belt.get_trays()
@@ -395,7 +443,7 @@ def main():
 
     while True:
         pygame.event.pump()
-        person.update(plants, obstacles)
+        person.update(plants, obstacles, watering_can)
         belt.update()
 
         if cycle % 1000 == 0:
@@ -405,24 +453,24 @@ def main():
 
         screen.fill(BACKGROUND)
         
-        back_plant = None
+        floating_items = plants + [watering_can]
         
-        front_plants = []
-        back_plants = []
-        for plant in plants:
-            if plant == person.subsprite:
+        front_items = []
+        back_items = []
+        for item in floating_items:
+            if item == person.subsprite:
                 if person.facing == Person.SOUTH:
-                    front_plants = [plant] + front_plants
+                    front_items = [item] + front_items
                 else:
-                    back_plants.append(plant)
-            elif plant.subsprite.rect.bottom < person.rect.bottom:
-                back_plants.append(plant)
+                    back_items.append(item)
+            elif item.get_rect().bottom < person.get_rect().bottom:
+                back_items.append(item)
             else:
-                front_plants.append(plant)
+                front_items.append(item)
 
-        [plant.draw(screen) for plant in back_plants]
+        [item.draw(screen) for item in back_items]
         person.draw(screen)
-        [plant.draw(screen) for plant in front_plants]
+        [item.draw(screen) for item in front_items]
 
         belt.draw(screen)
 
