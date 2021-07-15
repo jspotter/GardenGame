@@ -19,9 +19,27 @@ class Sprite(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
 
         self.rect.bottomleft = [startx, starty]
+
+        self.subsprite = None
+        self.holder = None
+        self.immune_from_obstacles = True
     
-    def move(self, dx, dy, bounds=False, obstacles=None):
-        if obstacles is None:
+    def adjust_deltas(self, dx, dy, bounds=False, obstacles=None):
+        '''
+        If bounds is set to True, take the bounds
+        of the universe into account.
+        
+        If obstacles is a sequence containing other
+        sprites, do not collide with those sprites.
+
+        If move_with contains an object, make sure both
+        self and this object can move together without
+        collision.
+
+        Return the dx and dy actually moved (may
+        be less than parameter values).
+        '''
+        if obstacles is None or self.immune_from_obstacles:
             obstacles = []
         
         if bounds:
@@ -47,9 +65,37 @@ class Sprite(pygame.sprite.Sprite):
 
         while self.check_collision(dx, dy, obstacles):
             dx -= numpy.sign(dx)
-
-        self.rect.move_ip([dx, dy])
+        
         return dx, dy
+    
+    def move(self, dx, dy, bounds=False, obstacles=None):
+        '''
+        Move this sprite by a certain x and y
+        amount, taking into account bounds,
+        obstacles, and subsprites.
+        '''
+
+        adx, ady = dx, dy
+        current_sprite = self
+        while True:
+            adx, ady = current_sprite.adjust_deltas(adx, ady, bounds, obstacles)
+
+            if current_sprite.subsprite is None:
+                break
+            
+            current_sprite = current_sprite.subsprite
+
+        current_sprite = self
+        while True:
+            current_sprite.move_unsafe(adx, ady)
+
+            if current_sprite.subsprite is None:
+                break
+            
+            current_sprite = current_sprite.subsprite
+    
+    def move_unsafe(self, dx, dy):
+        self.rect.move_ip([dx, dy])
 
     def update(self):
         pass
@@ -62,6 +108,11 @@ class Sprite(pygame.sprite.Sprite):
         collide = pygame.sprite.spritecollideany(self, grounds)
         self.rect.move_ip([-x, -y])
         return collide
+    
+    def set_immune_from_obstacles(self, value):
+        self.immune_from_obstacles = value
+        if self.subsprite is not None:
+            self.subsprite.set_immune_from_obstacles(value)
 
 class Person(Sprite):
     '''
@@ -80,7 +131,6 @@ class Person(Sprite):
         '''
         super().__init__("assets/person3.png", startx, starty)
         self.speed = 4
-        self.plant = None
         self.facing = Person.NORTH
         self.hands_free = True
 
@@ -91,77 +141,118 @@ class Person(Sprite):
             * picking up / setting down plant
             * TODO: picking up / setting down water
         '''
-        hsp = 0
-        vsp = 0
+        dx = 0
+        dy = 0
         key = pygame.key.get_pressed()
         if key[pygame.K_LEFT]:
-            hsp = -self.speed
-            self.facing = Person.WEST
+            dx = -self.speed
+            self.change_direction(Person.WEST)
         elif key[pygame.K_RIGHT]:
-            hsp = self.speed
-            self.facing = Person.EAST
+            dx = self.speed
+            self.change_direction(Person.EAST)
         elif key[pygame.K_UP]:
-            vsp = -self.speed
-            self.facing = Person.NORTH
+            dy = -self.speed
+            self.change_direction(Person.NORTH)
         elif key[pygame.K_DOWN]:
-            vsp = self.speed
-            self.facing = Person.SOUTH
+            dy = self.speed
+            self.change_direction(Person.SOUTH)
 
         if key[pygame.K_SPACE]:
             if self.hands_free:
                 self.hands_free = False
-                if self.plant is None:
-                    nearby_plants = pygame.sprite.spritecollide(self, plants, False)
-
-                    if len(nearby_plants) > 0:
-                        self.plant = nearby_plants[0]
-                        self.plant.person = self
-                        if self.plant.tray is not None:
-                            self.plant.tray.plant = None
-                            self.plant.tray = None
+                if self.subsprite is None:
+                    self.pickup_nearby_plant(plants)
                 else:
-                    self.plant.person = None
-                    self.plant = None
+                    self.subsprite.person = None
+                    self.subsprite = None
                     # TODO: allow placement back on conveyor belt?
         else:
             self.hands_free = True
+        
+        self.move(dx, dy, True, obstacles)
 
-        dx, dy = self.move(hsp, vsp, True, obstacles)
-        if self.plant is not None:
-            self.plant.move(dx, dy, True)
+    def change_direction(self, direction):
+        self.facing = direction
+        self.move_plant_to_front()
+    
+    def pickup_nearby_plant(self, plants):
+        '''
+        If we don't have a plant and there is a plant
+        nearby, pick up one nearby plant and move it
+        to the front.
+        '''
+        if self.subsprite is not None:
+            return
+
+        nearby_plants = pygame.sprite.spritecollide(self, plants, False)
+
+        if len(nearby_plants) > 0:
+            self.subsprite = nearby_plants[0]
+            if self.subsprite.holder is not None:
+                self.subsprite.holder.subsprite = None
+            self.subsprite.holder = self
+            self.move_plant_to_front()
+            
+    def move_plant_to_front(self):
+        '''
+        Move the plant to the front of our body,
+        depending on which direction we are facing.
+        '''
+        if self.subsprite is None or self.subsprite.subsprite is None:
+            return
+        
+        if self.facing == Person.NORTH:
+            self.subsprite.move(\
+                self.rect.centerx - self.subsprite.subsprite.rect.centerx, \
+                self.rect.top - self.subsprite.subsprite.rect.top)
+        elif self.facing == Person.EAST:
+            self.subsprite.move(\
+                self.rect.centerx - self.subsprite.subsprite.rect.left, \
+                self.rect.centery - self.subsprite.subsprite.rect.centery)
+        if self.facing == Person.SOUTH:
+            self.subsprite.move(\
+                self.rect.centerx - self.subsprite.subsprite.rect.centerx, \
+                self.rect.bottom - self.subsprite.subsprite.rect.bottom)
+        if self.facing == Person.WEST:
+            self.subsprite.move(\
+                self.rect.centerx - self.subsprite.subsprite.rect.right, \
+                self.rect.centery - self.subsprite.subsprite.rect.centery)
 
 class Container(Sprite):
     def __init__(self, startx, starty):
         super().__init__("assets/bag1.png", startx, starty)
 
 class Plant(Sprite):
+    '''
+    Composite object with a plant and a container.
+    '''
     def __init__(self, startx, starty):
         super().__init__("assets/plant1.png", startx, starty)
-        self.container = Container(startx, starty)
-        self.tray = None
-        self.person = None
+        self.subsprite = Container(startx, starty)
 
         self.rect.move_ip([
-            self.rect.left - self.container.rect.left,
-            self.container.rect.top - self.rect.bottom
+            self.rect.left - self.subsprite.rect.left,
+            self.subsprite.rect.top - self.rect.bottom
         ])
     
     def draw(self, screen):
         super().draw(screen)
-        self.container.draw(screen)
+        self.subsprite.draw(screen)
     
-    def move(self, dx, dy, bounds=False):
-        dx, dy = super().move(dx, dy, bounds)
-        self.container.move(dx, dy, bounds)
+    def move(self, dx, dy, bounds=False, obstacles=None):
+        super().move(dx, dy, bounds, obstacles)
+        if self.immune_from_obstacles and \
+            obstacles is not None and \
+            not self.check_collision(0, 0, obstacles):
+            self.set_immune_from_obstacles(False)
 
 class ConveyorBeltTray(Sprite):
     '''
-    Single tray on a conveyor belt
-    that carries plants
+    Single tray on a conveyor belt that carries
+    plants
     '''
     def __init__(self, startx, starty):
         super().__init__("assets/tray1.png", startx, starty)
-        self.plant = None
     
     def update(self):
         '''
@@ -169,8 +260,6 @@ class ConveyorBeltTray(Sprite):
         if we have one.
         '''
         self.move(-TRAY_SPEED, 0)
-        if self.plant is not None:
-            self.plant.move(-TRAY_SPEED, 0)
 
 class ConveyorBelt:
     '''
@@ -186,6 +275,7 @@ class ConveyorBelt:
         '''
         Update each tray in belt
         '''
+
         [tray.update() for tray in self.trays]
         if self.trays[0].rect.right < 0:
             self.trays[0].rect.left = self.trays[-1].rect.right
@@ -205,12 +295,12 @@ class ConveyorBelt:
         
         # cannot add a new plant if the last
         # tray is already full
-        if last_tray.plant is not None:
+        if last_tray.subsprite is not None:
             return None
 
         new_plant = Plant(last_tray.rect.left + PLANT_BUFFER, last_tray.rect.bottom - PLANT_BUFFER)
-        last_tray.plant = new_plant
-        new_plant.tray = last_tray
+        last_tray.subsprite = new_plant
+        new_plant.holder = last_tray
 
         return new_plant
     
@@ -238,7 +328,7 @@ def main():
     while True:
         pygame.event.pump()
         person.update(plants, obstacles)
-        if cycle % 5 == 0:
+        if cycle % 2 == 0:
             belt.update()
         if cycle % 1000 == 0:
             new_plant = belt.add_plant()
