@@ -133,10 +133,13 @@ class Sprite(pygame.sprite.Sprite):
         screen.blit(self.image, self.rect)
     
     def check_collision(self, x, y, grounds):
+        return len(self.get_collisions(x, y, grounds)) != 0
+    
+    def get_collisions(self, x, y, grounds):
         self.rect.move_ip([x, y])
-        collide = pygame.sprite.spritecollideany(self, grounds)
+        collisions = pygame.sprite.spritecollide(self, grounds, False)
         self.rect.move_ip([-x, -y])
-        return collide
+        return collisions
     
     def check_semi_collision(self, x, y, grounds):
         self.rect.move_ip([x, y])
@@ -210,13 +213,13 @@ class Person(Sprite):
             if self.hands_free:
                 self.hands_free = False
                 if self.subsprite is None:
-                    self.pickup_nearby_object(plants)
+                    self.pickup_nearby_object(plants + [watering_can])
                 else:
                     self.place_object()
         else:
             self.hands_free = True
         
-        semi_obstacles = [p for p in plants if p != self.subsprite] + [watering_can]
+        semi_obstacles = [i for i in plants + [watering_can] if i != self.subsprite]
         self.move(dx, dy, True, obstacles, semi_obstacles)
 
     def change_direction(self, direction):
@@ -235,7 +238,17 @@ class Person(Sprite):
 
         self.move_object_to_front()
     
-    def pickup_nearby_object(self, plants):
+    def get_one_step_deltas(self):
+        if self.facing == Person.NORTH:
+            return (0, -1)
+        elif self.facing == Person.SOUTH:
+            return (0, 1)
+        elif self.facing == Person.EAST:
+            return (1, 0)
+        elif self.facing == Person.WEST:
+            return (-1, 0)
+    
+    def pickup_nearby_object(self, objects):
         '''
         If we don't have an object and there is an object
         nearby, pick up one nearby object and move it
@@ -244,10 +257,11 @@ class Person(Sprite):
         if self.subsprite is not None:
             return
 
-        nearby_plants = pygame.sprite.spritecollide(self, plants, False)
+        dx, dy = self.get_one_step_deltas()
+        nearby_objects = self.get_collisions(dx, dy, objects)
 
-        if len(nearby_plants) > 0:
-            self.subsprite = nearby_plants[0]
+        if len(nearby_objects) > 0:
+            self.subsprite = nearby_objects[0]
             if self.subsprite.holder is not None:
                 self.subsprite.holder.subsprite = None
             self.subsprite.holder = self
