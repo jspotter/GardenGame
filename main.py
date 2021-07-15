@@ -15,10 +15,23 @@ class Sprite(pygame.sprite.Sprite):
     '''
     Credit: https://docs.replit.com/tutorials/14-2d-platform-game
     '''
+
+    NORTH = 0
+    EAST = 1
+    SOUTH = 2
+    WEST = 3
+
     def __init__(self, image, startx, starty):
         super().__init__()
 
         self.image = pygame.image.load(image)
+        self.left_image = self.image
+        self.right_image = self.image
+        self.back_image = self.image
+        self.front_image = self.image
+        
+        self.facing = Sprite.SOUTH
+
         self.rect = self.image.get_rect()
 
         self.rect.bottomleft = [startx, starty]
@@ -27,6 +40,23 @@ class Sprite(pygame.sprite.Sprite):
         self.holder = None
         self.immune_from_obstacles = True
         self.immune_from_semi_obstacles = True
+    
+    def change_direction(self, direction):
+        if direction == self.facing:
+            return
+
+        self.facing = direction
+        if self.facing == Sprite.NORTH:
+            self.image = self.back_image
+        elif self.facing == Sprite.SOUTH:
+            self.image = self.front_image
+        elif self.facing == Sprite.EAST:
+            self.image = self.right_image
+        elif self.facing == Sprite.WEST:
+            self.image = self.left_image
+
+        if self.subsprite is not None:
+            self.subsprite.change_direction(direction)
 
     def get_bottom_edge(self):
         return pygame.Rect(self.rect.left,\
@@ -162,11 +192,6 @@ class Person(Sprite):
     Represent the game's primary actor.
     '''
 
-    NORTH = 0
-    EAST = 1
-    SOUTH = 2
-    WEST = 3
-
     def __init__(self, startx, starty):
         '''
         Inspired by:
@@ -183,7 +208,6 @@ class Person(Sprite):
         self.right_image = pygame.image.load("assets/person3_right.png")
 
         self.speed = PERSON_SPEED
-        self.facing = Person.SOUTH
         self.hands_free = True
 
     def update(self, plants, obstacles, watering_can):
@@ -223,19 +247,8 @@ class Person(Sprite):
         self.move(dx, dy, True, obstacles, semi_obstacles)
 
     def change_direction(self, direction):
-        if direction == self.facing:
-            return
-
-        self.facing = direction
-        if self.facing == Person.NORTH:
-            self.image = self.back_image
-        elif self.facing == Person.SOUTH:
-            self.image = self.front_image
-        elif self.facing == Person.EAST:
-            self.image = self.right_image
-        elif self.facing == Person.WEST:
-            self.image = self.left_image
-
+        super().change_direction(direction)
+        
         self.move_object_to_front()
     
     def get_one_step_deltas(self):
@@ -265,6 +278,7 @@ class Person(Sprite):
             if self.subsprite.holder is not None:
                 self.subsprite.holder.subsprite = None
             self.subsprite.holder = self
+            self.subsprite.change_direction(self.facing)
             self.move_object_to_front()
     
     def get_plant_placement_buffer(self):
@@ -294,7 +308,7 @@ class Person(Sprite):
         Move the object to the front of our body,
         depending on which direction we are facing.
         '''
-        if self.subsprite is None or self.subsprite.subsprite is None:
+        if self.subsprite is None:
             return
         
         my_rect = self.get_rect()
@@ -375,6 +389,11 @@ class WateringCan(Sprite):
     '''
     def __init__(self, startx, starty):
         super().__init__("assets/watering_can.png", startx, starty)
+
+        self.left_image = self.image
+        self.right_image = pygame.transform.flip(self.left_image, True, False)
+        self.back_image = pygame.image.load('assets/watering_can_back.png')
+        self.front_image = pygame.image.load('assets/watering_can_front.png')
 
 class ConveyorBeltTray(Sprite):
     '''
