@@ -6,6 +6,7 @@ TRAY_WIDTH = 40
 TRAY_SPEED = 1
 NUM_TRAYS = 11
 PLANT_BUFFER = 5
+PLANT_PLACEMENT_BUFFER = 5
 BACKGROUND = (255, 255, 255)
 
 class Sprite(pygame.sprite.Sprite):
@@ -175,6 +176,12 @@ class Person(Sprite):
                 if self.subsprite is None:
                     self.pickup_nearby_plant(plants)
                 else:
+                    extra_buffer = -PLANT_PLACEMENT_BUFFER
+                    if self.facing == Person.SOUTH:
+                        extra_buffer = -extra_buffer
+                    elif self.facing == Person.NORTH:
+                        extra_buffer *= 2
+                    self.subsprite.move(0, self.rect.bottom - self.subsprite.subsprite.rect.bottom + extra_buffer)
                     self.subsprite.holder = None
                     self.subsprite = None
                     # TODO: allow placement back on conveyor belt?
@@ -243,7 +250,7 @@ class Person(Sprite):
 
 class Container(Sprite):
     def __init__(self, startx, starty):
-        super().__init__("assets/bag1.png", startx, starty)
+        super().__init__("assets/pot.png", startx, starty)
 
 class Plant(Sprite):
     '''
@@ -354,8 +361,25 @@ def main():
 
         screen.fill(BACKGROUND)
         
+        back_plant = None
+        
+        front_plants = []
+        back_plants = []
+        for plant in plants:
+            if plant == person.subsprite:
+                if person.facing == Person.SOUTH:
+                    front_plants.append(plant)
+                else:
+                    back_plants.append(plant)
+            elif plant.subsprite.rect.bottom < person.rect.bottom:
+                back_plants.append(plant)
+            else:
+                front_plants.append(plant)
+
+        [plant.draw(screen) for plant in back_plants]
         person.draw(screen)
-        [plant.draw(screen) for plant in plants]
+        [plant.draw(screen) for plant in front_plants]
+
         belt.draw(screen)
 
         pygame.display.flip()
