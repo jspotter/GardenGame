@@ -357,13 +357,14 @@ class Container(Sprite):
 
 class WaterManager:
     def __init__(self):
-        self.water_level = 0
+        #TODO: make constants?
         self.cycles_without_water = 0
-        self.max_water_level = random.randint(10, 20)
+        self.max_water_level = float(random.randint(10, 20))
+        self.water_level = self.max_water_level
         self.cycles_per_water_loss = random.randint(30, 60)
         self.overwater_buffer = 2
-        self.overwater_limit = self.max_water_level * 2
-        self.overwater_decay = random.randint(120, 240)
+        self.overwater_limit = self.max_water_level * 3
+        self.water_decay = random.randint(5, 10)
 
 class Plant(Sprite):
     '''
@@ -373,6 +374,7 @@ class Plant(Sprite):
         super().__init__("assets/plant1.png", startx, starty)
         self.subsprite = Container(startx, starty)
         self.water_manager = WaterManager()
+        self.font = pygame.font.SysFont('Courier', 10)
 
         self.rect.move_ip([
             self.rect.left - self.subsprite.rect.left,
@@ -391,10 +393,23 @@ class Plant(Sprite):
     def get_bottom_edge(self):
         return self.subsprite.get_bottom_edge()
     
+    def update(self, cycle, water_spray):
+        super().update()
+
+        if water_spray is not None and\
+            self.get_rect().colliderect(water_spray.get_rect()):
+            self.water_manager.water_level += 0.01
+
+        if cycle % self.water_manager.water_decay == 0:
+            self.water_manager.water_level = max(0.0, self.water_manager.water_level - 0.01)
+    
     def draw(self, screen):
         super().draw(screen)
         if self.subsprite is not None:
             self.subsprite.draw(screen)
+        
+        water_text = self.font.render('water: {}'.format(int(self.water_manager.water_level)), True, (0, 0, 0))
+        screen.blit(water_text, (self.rect.x, self.rect.y - water_text.get_rect().height))
 
 class WaterSpray(Sprite):
     '''
@@ -545,6 +560,7 @@ def main():
     while True:
         pygame.event.pump()
         person.update(plants, obstacles, watering_can)
+        [p.update(cycle, watering_can.subsprite) for p in plants]
         belt.update()
 
         if cycle % 1000 == 0:
