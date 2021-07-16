@@ -355,17 +355,6 @@ class Container(Sprite):
     def __init__(self, startx, starty):
         super().__init__("assets/pot.png", startx, starty)
 
-class WaterManager:
-    def __init__(self):
-        #TODO: make constants?
-        self.cycles_without_water = 0
-        self.max_water_level = float(random.randint(10, 20))
-        self.water_level = self.max_water_level
-        self.cycles_per_water_loss = random.randint(30, 60)
-        self.overwater_buffer = 2
-        self.overwater_limit = self.max_water_level * 3
-        self.water_decay = random.randint(5, 10)
-
 class Plant(Sprite):
     '''
     Composite object with a plant and a container.
@@ -373,8 +362,21 @@ class Plant(Sprite):
     def __init__(self, startx, starty):
         super().__init__("assets/plant1.png", startx, starty)
         self.subsprite = Container(startx, starty)
-        self.water_manager = WaterManager()
         self.font = pygame.font.SysFont('Courier', 10)
+        
+        self.alive = True
+        self.underwatered = False
+        self.overwatered = False
+
+        self.cycles_without_water = 0
+        self.max_cycles_without_water = 1500
+        
+        self.max_water_level = float(random.randint(10, 20))
+        self.water_level = self.max_water_level
+        self.water_decay = random.randint(4, 8) / 1000
+
+        self.overwater_amount = 0.0
+        self.overwater_limit = self.max_water_level * 0.5
 
         self.rect.move_ip([
             self.rect.left - self.subsprite.rect.left,
@@ -398,17 +400,44 @@ class Plant(Sprite):
 
         if water_spray is not None and\
             self.get_rect().colliderect(water_spray.get_rect()):
-            self.water_manager.water_level += 0.01
+            self.water_level += 0.05
 
-        if cycle % self.water_manager.water_decay == 0:
-            self.water_manager.water_level = max(0.0, self.water_manager.water_level - 0.01)
+        self.water_level = max(\
+            0.0, self.water_level - self.water_decay)
+
+        if self.water_level >\
+            self.max_water_level:
+            
+            self.overwater_amount += self.water_decay
+        
+        elif self.overwater_amount > 0.0:
+            self.overwater_amount -= min(self.water_decay * 0.25, self.overwater_amount)
+
+        if self.overwater_amount +\
+            (self.water_level - self.max_water_level) >\
+            self.overwater_limit:
+            
+            self.alive = False
+            self.overwatered = True
+        
+        if self.water_level < 0.01:
+            self.cycles_without_water += 1
+            if self.cycles_without_water >=\
+                self.max_cycles_without_water:
+                
+                self.alive = False
+                self.underwatered = True
     
     def draw(self, screen):
         super().draw(screen)
         if self.subsprite is not None:
             self.subsprite.draw(screen)
         
-        water_text = self.font.render('water: {}'.format(int(self.water_manager.water_level)), True, (0, 0, 0))
+        color = (0, 0, 0)
+        if self.water_level < 0.1 or self.water_level > self.max_water_level:
+            color = (255, 0, 0)
+
+        water_text = self.font.render('water: {}'.format(int(self.water_level)), True, color)
         screen.blit(water_text, (self.rect.x, self.rect.y - water_text.get_rect().height))
 
 class WaterSpray(Sprite):
@@ -538,6 +567,33 @@ class ConveyorBelt:
     def get_trays(self):
         return self.trays
 
+def get_cause(plant):
+    if plant.overwatered:
+        return 'You overwatered one of your plants.'
+    elif plant.underwatered:
+        return 'You underwatered one of your plants.'
+    
+    return ''
+
+def show_game_over(plant, screen):
+    red_x = Sprite("assets/x.png", plant.get_rect().left, plant.get_rect().bottom)
+    red_x.draw(screen)
+
+    game_over_font = pygame.font.SysFont('Courier', 50)
+    info_font = pygame.font.SysFont('Courier', 12)
+
+    game_over_text = game_over_font.render('GAME OVER', True,\
+        (0, 0, 0), (255, 255, 255))
+    screen.blit(game_over_text, (10, 10))
+
+    cause_text = info_font.render(get_cause(plant),\
+        True, (0, 0, 0), (255, 255, 255))
+    screen.blit(cause_text, (10, 10 + game_over_text.get_rect().height))
+
+    enter_text = info_font.render('Press ENTER to exit.',\
+        True, (0, 0, 0), (255, 255, 255))
+    screen.blit(enter_text, (10, 10 + game_over_text.get_rect().height + cause_text.get_rect().height))
+
 def main():
     '''
     Main game driver.
@@ -556,40 +612,53 @@ def main():
     obstacles = belt.get_trays()
     
     cycle = 0
+    game_over = False
 
     while True:
         pygame.event.pump()
-        person.update(plants, obstacles, watering_can)
-        [p.update(cycle, watering_can.subsprite) for p in plants]
-        belt.update()
+        if game_over:
+            key = pygame.key.get_pressed()
+            if key[pygame.K_RETURN]:
+                break
+        else:
+            person.update(plants, obstacles, watering_can)
+            [p.update(cycle, watering_can.subsprite) for p in plants]
 
-        if cycle % 1000 == 0:
-            new_plant = belt.add_plant()
-            if new_plant is not None:
-                plants.append(new_plant)
+            belt.update()
 
-        screen.fill(BACKGROUND)
-        
-        floating_items = plants + [watering_can]
-        
-        front_items = []
-        back_items = []
-        for item in floating_items:
-            if item == person.subsprite:
-                if person.facing == Sprite.SOUTH:
-                    front_items = [item] + front_items
-                else:
+            if cycle % 1000 == 0:
+                new_plant = belt.add_plant()
+                if new_plant is not None:
+                    plants.append(new_plant)
+
+            screen.fill(BACKGROUND)
+            
+            floating_items = plants + [watering_can]
+            
+            front_items = []
+            back_items = []
+            for item in floating_items:
+                if item == person.subsprite:
+                    if person.facing == Sprite.SOUTH:
+                        front_items = [item] + front_items
+                    else:
+                        back_items.append(item)
+                elif item.get_rect().bottom < person.get_rect().bottom:
                     back_items.append(item)
-            elif item.get_rect().bottom < person.get_rect().bottom:
-                back_items.append(item)
-            else:
-                front_items.append(item)
+                else:
+                    front_items.append(item)
 
-        [item.draw(screen) for item in back_items]
-        person.draw(screen)
-        [item.draw(screen) for item in front_items]
+            [item.draw(screen) for item in back_items]
+            person.draw(screen)
+            [item.draw(screen) for item in front_items]
 
-        belt.draw(screen)
+            belt.draw(screen)
+
+            for p in plants:
+                if not p.alive:
+                    show_game_over(p, screen)
+                    game_over = True
+                    break
 
         pygame.display.flip()
 
