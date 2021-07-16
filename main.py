@@ -575,6 +575,37 @@ def get_cause(plant):
     
     return ''
 
+def show_game_start(screen):
+    game_start_font = pygame.font.SysFont('Courier', 30)
+    info_font = pygame.font.SysFont('Courier', 12)
+
+    x = 10
+    next_y = 10
+
+    game_start_text = game_start_font.render('Botanical Bonanza', True,\
+        (0, 0, 0), (255, 255, 255))
+    screen.blit(game_start_text, (x, next_y))
+    next_y += game_start_text.get_rect().height
+
+    move_text = info_font.render('  move: arrow keys',\
+        True, (0, 0, 0), (255, 255, 255))
+    screen.blit(move_text, (x, next_y))
+    next_y += move_text.get_rect().height
+
+    object_text = info_font.render('  pick up or put down object: space',\
+        True, (0, 0, 0), (255, 255, 255))
+    screen.blit(object_text, (x, next_y))
+    next_y += object_text.get_rect().height
+
+    water_text = info_font.render('  water plant: shift',\
+        True, (0, 0, 0), (255, 255, 255))
+    screen.blit(water_text, (x, next_y))
+    next_y += water_text.get_rect().height
+
+    enter_text = info_font.render('Press ENTER to play!',\
+        True, (0, 0, 0), (255, 255, 255))
+    screen.blit(enter_text, (x, next_y))
+
 def show_game_over(plant, screen):
     red_x = Sprite("assets/x.png", plant.get_rect().left, plant.get_rect().bottom)
     red_x.draw(screen)
@@ -612,14 +643,23 @@ def main():
     obstacles = belt.get_trays()
     
     cycle = 0
+    game_start = True
     game_over = False
 
     while True:
         pygame.event.pump()
-        if game_over:
+        screen.fill(BACKGROUND)
+
+        if game_start:
+            show_game_start(screen)
+
+        if game_start or game_over:
             key = pygame.key.get_pressed()
             if key[pygame.K_RETURN]:
-                break
+                if game_start:
+                    game_start = False
+                else:
+                    break
         else:
             person.update(plants, obstacles, watering_can)
             [p.update(cycle, watering_can.subsprite) for p in plants]
@@ -630,8 +670,6 @@ def main():
                 new_plant = belt.add_plant()
                 if new_plant is not None:
                     plants.append(new_plant)
-
-            screen.fill(BACKGROUND)
             
             floating_items = plants + [watering_can]
             
@@ -659,11 +697,12 @@ def main():
                     show_game_over(p, screen)
                     game_over = True
                     break
+            
+            cycle += 1
 
         pygame.display.flip()
 
         clock.tick(60)
-        cycle += 1
 
 if __name__ == "__main__":
     main()
