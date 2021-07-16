@@ -576,6 +576,9 @@ def get_cause(plant):
     return ''
 
 def show_game_start(screen):
+    '''
+    Instructional screen at beginning
+    '''
     game_start_font = pygame.font.SysFont('Courier', 30)
     info_font = pygame.font.SysFont('Courier', 12)
 
@@ -587,17 +590,17 @@ def show_game_start(screen):
     screen.blit(game_start_text, (x, next_y))
     next_y += game_start_text.get_rect().height
 
-    move_text = info_font.render('  move: arrow keys',\
+    move_text = info_font.render('  arrow keys:  move',\
         True, (0, 0, 0), (255, 255, 255))
     screen.blit(move_text, (x, next_y))
     next_y += move_text.get_rect().height
 
-    object_text = info_font.render('  pick up or put down object: space',\
+    object_text = info_font.render('       space:  pick up or put down object',\
         True, (0, 0, 0), (255, 255, 255))
     screen.blit(object_text, (x, next_y))
     next_y += object_text.get_rect().height
 
-    water_text = info_font.render('  water plant: shift',\
+    water_text = info_font.render('       shift:  water plant',\
         True, (0, 0, 0), (255, 255, 255))
     screen.blit(water_text, (x, next_y))
     next_y += water_text.get_rect().height
@@ -606,24 +609,39 @@ def show_game_start(screen):
         True, (0, 0, 0), (255, 255, 255))
     screen.blit(enter_text, (x, next_y))
 
-def show_game_over(plant, screen):
+def show_game_over(plant, score, screen):
+    '''
+    Shows screen when game ends, along with
+    reason for game ending
+    '''
     red_x = Sprite("assets/x.png", plant.get_rect().left, plant.get_rect().bottom)
     red_x.draw(screen)
+
+    x = 10
+    next_y = 10
 
     game_over_font = pygame.font.SysFont('Courier', 50)
     info_font = pygame.font.SysFont('Courier', 12)
 
     game_over_text = game_over_font.render('GAME OVER', True,\
         (0, 0, 0), (255, 255, 255))
-    screen.blit(game_over_text, (10, 10))
+    screen.blit(game_over_text, (x, next_y))
+    next_y += game_over_text.get_rect().height
 
     cause_text = info_font.render(get_cause(plant),\
         True, (0, 0, 0), (255, 255, 255))
-    screen.blit(cause_text, (10, 10 + game_over_text.get_rect().height))
+    screen.blit(cause_text, (x, next_y))
+    next_y += cause_text.get_rect().height
+
+    score_text = info_font.render(\
+        'Score (plants in play): {}'.format(score),\
+        True, (0, 0, 0), (255, 255, 255))
+    screen.blit(score_text, (x, next_y))
+    next_y += score_text.get_rect().height
 
     enter_text = info_font.render('Press ENTER to exit.',\
         True, (0, 0, 0), (255, 255, 255))
-    screen.blit(enter_text, (10, 10 + game_over_text.get_rect().height + cause_text.get_rect().height))
+    screen.blit(enter_text, (x, next_y))
 
 def main():
     '''
@@ -641,6 +659,8 @@ def main():
     plants = []
     belt = ConveyorBelt()
     obstacles = belt.get_trays()
+    score = 0
+    faulting_plant = None
     
     cycle = 0
     game_start = True
@@ -648,9 +668,14 @@ def main():
 
     while True:
         pygame.event.pump()
-        screen.fill(BACKGROUND)
 
+        if not game_over:
+            screen.fill(BACKGROUND)
+            
         if game_start:
+            person.draw(screen)
+            belt.draw(screen)
+            watering_can.draw(screen)
             show_game_start(screen)
 
         if game_start or game_over:
@@ -694,7 +719,8 @@ def main():
 
             for p in plants:
                 if not p.alive:
-                    show_game_over(p, screen)
+                    score = len([p for p in plants if not isinstance(p.holder, ConveyorBeltTray)])
+                    show_game_over(p, score, screen)
                     game_over = True
                     break
             
