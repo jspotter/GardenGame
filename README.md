@@ -25,4 +25,4 @@ Finally, you can run the game using this command:
 
         python3 main.py
 
-## jpotter4 was here! ##
+jpotter4 was here!
