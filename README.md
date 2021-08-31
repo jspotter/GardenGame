@@ -24,3 +24,5 @@ Use pipenv to install pygame and numpy:
 Finally, you can run the game using this command:
 
         python3 main.py
+
+## jpotter4 was here! ##
